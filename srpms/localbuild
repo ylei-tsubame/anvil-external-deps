@@ -1,0 +1,58 @@
+#!/bin/bash
+#
+# usage: localbuild <working directory> <rpmbuild options>
+#
+# example: build srpm for drbd-utils
+# $ localbuild drbd-utils -bs
+#
+
+set -e
+
+[ -z "$CDIR" ] && CDIR="${1:-.}"
+shift 1
+
+cd "$CDIR"
+
+speclist=$(ls -1 *.spec)
+specfile=$(head -1 <<< "$speclist")
+
+printf "speclist=[\n%s\n]\n" "$speclist"
+echo "specfile=[$specfile]"
+
+cwd="$(pwd)"
+
+echo "cwd=[$cwd]"
+
+source0=$(spectool \
+    --define "_srcrpmdir $cwd" \
+    --define "_sourcedir $cwd" \
+    --source 0 \
+    "$specfile" \
+)
+source0=$(sed --regexp-extended 's/^Source0:[[:space:]]*//;' <<< "$source0")
+
+sourcename="${source0##*/}"
+sourcepath="$cwd/$sourcename"
+
+echo "source0=[$source0]"
+echo "sourcename=[$sourcename]"
+echo "sourcepath=[$sourcepath]"
+
+topdir="$cwd/rpmbuild"
+
+echo "rpmbuild:topdir=[$topdir]"
+
+if ! [ -s "$sourcepath" ]; then
+    wget "$source0"
+fi
+
+mkdir -p "$topdir"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+
+rpmbuild \
+    --define "_srcrpmdir $cwd" \
+    --define "_sourcedir $cwd" \
+    --define "_topdir $topdir" \
+    --nodeps \
+    "$@" \
+    "$specfile"
+
